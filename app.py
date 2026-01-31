@@ -1,22 +1,17 @@
 import streamlit as st
 import json
 import os
-from openai import OpenAI
 from google import genai
 from google.genai import types
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="AI Video Storyboarder", layout="wide")
 
-st.title("🎬 AI Video Storyboarder")
+st.title("🎬 AI Video Storyboarder (Powered by Gemini)")
 st.markdown("### Turn YouTube Scripts into Cinematic Scenes")
 
 # --- AUTHENTICATION (SECRETS) ---
-if "OPENAI_API_KEY" in st.secrets:
-    openai_api_key = st.secrets["OPENAI_API_KEY"]
-else:
-    openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
-
+# Now we only need ONE key for everything!
 if "GEMINI_API_KEY" in st.secrets:
     gemini_api_key = st.secrets["GEMINI_API_KEY"]
 else:
@@ -25,7 +20,7 @@ else:
 # --- MAIN INPUT ---
 script_input = st.text_area("Paste your YouTube Script here:", height=200)
 
-# --- THE MASTER PROMPT (UPDATED WITH YOUR RULES) ---
+# --- THE MASTER PROMPT ---
 SYSTEM_PROMPT = """
 ROLE:
 You are a professional film director, cinematographer, and storyboard artist.
@@ -56,10 +51,6 @@ Each Image Prompt MUST include:
 PROMPT STRUCTURE (MANDATORY):
 "Cinematic [shot type] of [subject + action], in [environment], [lighting details], [mood], [camera angle + lens], [color palette], ultra realistic, film still, high detail textures, depth of field, volumetric light, professional cinematography, 8k"
 
-EXAMPLE:
-Input: "I woke up at 5am and the city was still asleep"
-Output Prompt: "Cinematic close-up of a young man opening his eyes in a dim bedroom, soft blue pre-dawn light through curtains, alarm clock showing 5:00 AM glowing red, dust particles in air, quiet atmosphere, side angle 50mm lens, cold blue and grey palette, shallow depth of field, film still, ultra detailed, 8k"
-
 OUTPUT FORMAT (JSON ONLY):
 Return results in a valid JSON object. Do not use Markdown. Use this exact structure:
 {
@@ -75,31 +66,34 @@ Return results in a valid JSON object. Do not use Markdown. Use this exact struc
 }
 """
 
-# --- FUNCTION: GENERATE SCENES (OPENAI) ---
-def get_scenes(script, api_key):
+# --- FUNCTION: GENERATE SCENES (GEMINI TEXT) ---
+def get_scenes_gemini(script, api_key):
     if not api_key:
-        st.error("OpenAI API Key is missing!")
+        st.error("Gemini API Key is missing!")
         return None
-    client = OpenAI(api_key=api_key)
+    
+    client = genai.Client(api_key=api_key)
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": script}
-            ],
-            response_format={"type": "json_object"}
+        # We use Gemini 1.5 Pro or Flash for the logic as it follows JSON instructions well
+        response = client.models.generate_content(
+            model='gemini-2.0-flash', 
+            contents=[SYSTEM_PROMPT, f"SCRIPT:\n{script}"],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
         )
-        return json.loads(response.choices[0].message.content)
+        # Parse the JSON string response
+        return json.loads(response.text)
     except Exception as e:
         st.error(f"Error generating scenes: {e}")
         return None
 
-# --- FUNCTION: GENERATE IMAGE (GEMINI) ---
+# --- FUNCTION: GENERATE IMAGE (GEMINI IMAGE) ---
 def generate_image_gemini(prompt, api_key):
     if not api_key:
         st.error("Gemini API Key is missing!")
         return None
+    
     client = genai.Client(api_key=api_key)
     try:
         # Using Imagen 3 model
@@ -120,8 +114,8 @@ if st.button("🚀 Analyze Script & Generate Scenes"):
     if not script_input:
         st.error("Please enter a script!")
     else:
-        with st.spinner("Director is planning the shots (OpenAI)..."):
-            scene_data = get_scenes(script_input, openai_api_key)
+        with st.spinner("Director (Gemini) is planning the shots..."):
+            scene_data = get_scenes_gemini(script_input, gemini_api_key)
         
         if scene_data:
             st.session_state['scene_data'] = scene_data
@@ -140,7 +134,7 @@ if 'scene_data' in st.session_state:
             st.subheader(f"Scene {scene['scene_number']}")
             st.caption(f"⏱ {scene['timestamp']}")
             
-            # Show the script line if available, otherwise description
+            # Show script line
             script_text = scene.get('script_line', scene.get('visual_description', ''))
             st.markdown(f"**Script:** _{script_text}_")
             
