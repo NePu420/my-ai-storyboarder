@@ -7,7 +7,7 @@ from google.genai import types
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="AI Video Storyboarder", layout="wide")
 
-st.title("🎬 AI Video Storyboarder (Gemini 1.5 Flash)")
+st.title("🎬 AI Video Storyboarder (Gemini Fixed)")
 st.markdown("### Turn YouTube Scripts into Cinematic Scenes")
 
 # --- AUTHENTICATION (SECRETS) ---
@@ -65,7 +65,7 @@ Return results in a valid JSON object. Do not use Markdown. Use this exact struc
 }
 """
 
-# --- FUNCTION: GENERATE SCENES (GEMINI TEXT) ---
+# --- FUNCTION: GENERATE SCENES (TEXT) ---
 def get_scenes_gemini(script, api_key):
     if not api_key:
         st.error("Gemini API Key is missing!")
@@ -73,9 +73,9 @@ def get_scenes_gemini(script, api_key):
     
     client = genai.Client(api_key=api_key)
     try:
-        # UPDATED: Switched to gemini-1.5-flash (Standard Free Tier)
+        # FIX: Using the explicit version number 'gemini-1.5-flash-002' to avoid 404
         response = client.models.generate_content(
-            model='gemini-1.5-flash', 
+            model='gemini-1.5-flash-002', 
             contents=[SYSTEM_PROMPT, f"SCRIPT:\n{script}"],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json"
@@ -86,7 +86,7 @@ def get_scenes_gemini(script, api_key):
         st.error(f"Error generating scenes: {e}")
         return None
 
-# --- FUNCTION: GENERATE IMAGE (GEMINI IMAGE) ---
+# --- FUNCTION: GENERATE IMAGE (IMAGE) ---
 def generate_image_gemini(prompt, api_key):
     if not api_key:
         st.error("Gemini API Key is missing!")
@@ -104,8 +104,9 @@ def generate_image_gemini(prompt, api_key):
         )
         return response.generated_images[0].image
     except Exception as e:
-        st.warning(f"Image gen failed: {e}")
-        st.info("Note: If Image Gen fails, your API key might not have access to Imagen 3 yet. You may need to enable billing on Google Cloud.")
+        # Friendly error handling for images
+        st.warning(f"Image generation failed: {e}")
+        st.info("💡 Note: If this fails, your free Google API key might not support Imagen 3 yet. You can still use the text prompts generated above in Midjourney or Leonardo.ai!")
         return None
 
 # --- APP LOGIC ---
@@ -113,7 +114,7 @@ if st.button("🚀 Analyze Script & Generate Scenes"):
     if not script_input:
         st.error("Please enter a script!")
     else:
-        with st.spinner("Director (Gemini 1.5) is planning the shots..."):
+        with st.spinner("Director is planning the shots..."):
             scene_data = get_scenes_gemini(script_input, gemini_api_key)
         
         if scene_data:
@@ -133,7 +134,6 @@ if 'scene_data' in st.session_state:
             st.subheader(f"Scene {scene['scene_number']}")
             st.caption(f"⏱ {scene['timestamp']}")
             
-            # Show script line
             script_text = scene.get('script_line', scene.get('visual_description', ''))
             st.markdown(f"**Script:** _{script_text}_")
             
