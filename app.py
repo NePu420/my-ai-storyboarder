@@ -7,11 +7,10 @@ from google.genai import types
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="AI Video Storyboarder", layout="wide")
 
-st.title("🎬 AI Video Storyboarder (Powered by Gemini)")
+st.title("🎬 AI Video Storyboarder (Gemini 1.5 Flash)")
 st.markdown("### Turn YouTube Scripts into Cinematic Scenes")
 
 # --- AUTHENTICATION (SECRETS) ---
-# Now we only need ONE key for everything!
 if "GEMINI_API_KEY" in st.secrets:
     gemini_api_key = st.secrets["GEMINI_API_KEY"]
 else:
@@ -74,15 +73,14 @@ def get_scenes_gemini(script, api_key):
     
     client = genai.Client(api_key=api_key)
     try:
-        # We use Gemini 1.5 Pro or Flash for the logic as it follows JSON instructions well
+        # UPDATED: Switched to gemini-1.5-flash (Standard Free Tier)
         response = client.models.generate_content(
-            model='gemini-2.0-flash', 
+            model='gemini-1.5-flash', 
             contents=[SYSTEM_PROMPT, f"SCRIPT:\n{script}"],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json"
             )
         )
-        # Parse the JSON string response
         return json.loads(response.text)
     except Exception as e:
         st.error(f"Error generating scenes: {e}")
@@ -107,6 +105,7 @@ def generate_image_gemini(prompt, api_key):
         return response.generated_images[0].image
     except Exception as e:
         st.warning(f"Image gen failed: {e}")
+        st.info("Note: If Image Gen fails, your API key might not have access to Imagen 3 yet. You may need to enable billing on Google Cloud.")
         return None
 
 # --- APP LOGIC ---
@@ -114,7 +113,7 @@ if st.button("🚀 Analyze Script & Generate Scenes"):
     if not script_input:
         st.error("Please enter a script!")
     else:
-        with st.spinner("Director (Gemini) is planning the shots..."):
+        with st.spinner("Director (Gemini 1.5) is planning the shots..."):
             scene_data = get_scenes_gemini(script_input, gemini_api_key)
         
         if scene_data:
